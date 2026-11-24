@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Grok Orb Lab</title>
+<style>
+  html,body{margin:0;height:100%;background:#060812;overflow:hidden;font-family:ui-sans-serif,system-ui,Arial}
+  #c{display:block;width:100vw;height:100vh}
+  #panel{position:fixed;top:14px;left:14px;background:rgba(10,12,20,.82);border:1px solid #23263a;
+    border-radius:14px;padding:14px 16px;color:#e7e7ef;backdrop-filter:blur(8px);width:240px}
+  #panel h1{font-size:13px;margin:0 0 10px;letter-spacing:.06em;color:#EC4899}
+  .row{display:flex;align-items:center;justify-content:space-between;margin:9px 0;font-size:12px;color:#c7c9d6}
+  .row input[type=range]{width:120px;accent-color:#EC4899}
+  .row input[type=color]{width:34px;height:24px;border:none;background:none}
+  .shapes{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+  .shapes button{flex:1 0 46%;font-size:11px;padding:6px 4px;border-radius:8px;border:1px solid #2a2d42;
+    background:#12151f;color:#c7c9d6;cursor:pointer}
+  .shapes button.active{border-color:#EC4899;color:#fff}
+  .hint{font-size:10px;color:#6b6e82;margin-top:10px;line-height:1.4}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="panel">
+  <h1>GROK ORB LAB</h1>
+  <div class="row"><span>Base color</span><input type="color" id="col" value="#ec4899"></div>
+  <div class="row"><span>Glow</span><input type="range" id="glow" min="0" max="3" step="0.05" value="0.35"></div>
+  <div class="row"><span>Metal</span><input type="range" id="metal" min="0" max="1" step="0.02" value="0.9"></div>
+  <div class="row"><span>Rough</span><input type="range" id="rough" min="0" max="1" step="0.02" value="0.12"></div>
+  <div class="row"><span>Spin</span><input type="range" id="spin" min="0" max="2" step="0.02" value="0.4"></div>
+  <div class="row"><span>Eyes</span><input type="range" id="eyes" min="0" max="1" step="1" value="1"></div>
+  <div class="shapes" id="shapes">
+    <button data-s="sphere" class="active">Sphere</button>
+    <button data-s="cube">Rounded cube</button>
+    <button data-s="torus">Torus</button>
+    <button data-s="gem">Gem</button>
+    <button data-s="pill">Pill</button>
+    <button data-s="blob">Blob</button>
+  </div>
+  <div class="hint">Move your mouse — the eyes follow. Drag sliders to restyle live. Pick a shape above.</div>
+</div>
+<script type="importmap">
+{ "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+const canvas=document.getElementById('c');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+const scene=new THREE.Scene();
+const cam=new THREE.PerspectiveCamera(45,1,.1,100); cam.position.set(0,0,5);
+function resize(){const w=innerWidth,h=innerHeight;renderer.setSize(w,h);cam.aspect=w/h;cam.updateProjectionMatrix();}
+addEventListener('resize',resize);resize();
+
+// lighting
+scene.add(new THREE.AmbientLight(0x404058,0.6));
+const key=new THREE.PointLight(0xffffff,40);key.position.set(4,5,6);scene.add(key);
+const rim=new THREE.PointLight(0xec4899,30);rim.position.set(-5,-2,-3);scene.add(rim);
+
+const mat=new THREE.MeshStandardMaterial({color:0xec4899,metalness:0.9,roughness:0.12,
+  emissive:0xec4899,emissiveIntensity:0.0});
+let body=new THREE.Mesh(new THREE.SphereGeometry(1.2,96,96),mat);
+const group=new THREE.Group();group.add(body);scene.add(group);
+
+// eyes
+const eyeMat=new THREE.MeshStandardMaterial({color:0xffffff,emissive:0xffffff,emissiveIntensity:2.2});
+function mkEye(x){const e=new THREE.Mesh(new THREE.SphereGeometry(0.16,32,32),eyeMat);e.position.set(x,0.18,1.15);return e;}
+const eyeL=mkEye(-0.33),eyeR=mkEye(0.33);group.add(eyeL,eyeR);
+
+function geo(s){
+  if(s==='cube')return new THREE.BoxGeometry(1.8,1.8,1.8,8,8,8);
+  if(s==='torus')return new THREE.TorusGeometry(1,0.45,48,96);
+  if(s==='gem')return new THREE.OctahedronGeometry(1.5,0);
+  if(s==='pill')return new THREE.CapsuleGeometry(0.8,1.1,24,48);
+  if(s==='blob'){const g=new THREE.IcosahedronGeometry(1.3,24);const p=g.attributes.position;
+    for(let i=0;i<p.count;i++){const v=new THREE.Vector3().fromBufferAttribute(p,i);
+      const n=1+0.12*Math.sin(v.x*3)*Math.cos(v.y*3+1)*Math.sin(v.z*3+2);v.multiplyScalar(n);p.setXYZ(i,v.x,v.y,v.z);}g.computeVertexNormals();return g;}
+  return new THREE.SphereGeometry(1.2,96,96);
+}
+function setShape(s){body.geometry.dispose();body.geometry=geo(s);
+  const z=(s==='cube')?0.95:(s==='gem')?0.9:(s==='torus')?0.55:1.15;
+  eyeL.position.z=z;eyeR.position.z=z;}
+
+const mouse=new THREE.Vector2(0,0);
+addEventListener('mousemove',e=>{mouse.x=(e.clientX/innerWidth)*2-1;mouse.y=-(e.clientY/innerHeight)*2+1;});
+
+let spin=0.4;
+const clock=new THREE.Clock();
+function loop(){const t=clock.getElapsedTime();
+  group.rotation.y+=0.004*spin;group.position.y=Math.sin(t*1.2)*0.06;
+  const tx=mouse.x*0.08,ty=mouse.y*0.06;
+  eyeL.position.x=-0.33+tx;eyeR.position.x=0.33+tx;eyeL.position.y=0.18+ty;eyeR.position.y=0.18+ty;
+  renderer.render(scene,cam);requestAnimationFrame(loop);}
+loop();
+
+// controls
+const $=id=>document.getElementById(id);
+$('col').oninput=e=>{const c=new THREE.Color(e.target.value);mat.color.copy(c);mat.emissive.copy(c);rim.color.copy(c);};
+$('glow').oninput=e=>mat.emissiveIntensity=parseFloat(e.target.value);
+$('metal').oninput=e=>mat.metalness=parseFloat(e.target.value);
+$('rough').oninput=e=>mat.roughness=parseFloat(e.target.value);
+$('spin').oninput=e=>spin=parseFloat(e.target.value);
+$('eyes').oninput=e=>{const v=e.target.value==='1';eyeL.visible=v;eyeR.visible=v;};
+mat.emissiveIntensity=0.35;
+document.querySelectorAll('#shapes button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#shapes button').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');setShape(b.dataset.s);});
+</script>
+</body>
+</html>
